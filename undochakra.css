@@ -254,6 +254,26 @@
     drop-shadow: 0px 0px 0px 0px yellow;
 }
 
+.placeholder.selected {
+	opacity: 0.5;	
+    background-color: lime;
+    box-shadow: 0px 0px 8px 4px lime;
+    -webkit-animation: selectedpulse 1s infinite;
+    animation: selectedpulse 1s infinite;
+}
+
+@-webkit-keyframes selectedpulse {
+0%   { background-color: lime; box-shadow: 0px 0px 8px 4px lime; opacity: 0.5; }
+50%  { background-color: #00ff00; box-shadow: 0px 0px 12px 6px #00ff00; opacity: 0.7; }
+100% { background-color: lime; box-shadow: 0px 0px 8px 4px lime; opacity: 0.5; }
+}
+
+@keyframes selectedpulse {
+0%   { background-color: lime; box-shadow: 0px 0px 8px 4px lime; opacity: 0.5; }
+50%  { background-color: #00ff00; box-shadow: 0px 0px 12px 6px #00ff00; opacity: 0.7; }
+100% { background-color: lime; box-shadow: 0px 0px 8px 4px lime; opacity: 0.5; }
+}
+
 @-webkit-keyframes colorpulse {
 0%   { background-color: yellow; box-shadow: 0px 0px 5px 3px yellow; }
 20%   { background-color: yellow; box-shadow: 0px 0px 5px 3px yellow; }

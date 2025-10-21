@@ -546,17 +546,24 @@ class Undochakra extends Table
                     ) );
                 }
                 
-               if(count($this->channels[$channel][0])>$step+1)
-               {
-                   self::setGameStateValue( 'alreadyMoved', self::getGameStateValue( 'alreadyMoved') * 100 + $energyId);
-                   self::setGameStateValue( 'step', $step+1);
-                   self::setGameStateValue( 'choice', array_search($row, $possibles[$energyId]));
-                   $this->gamestate->nextState( 'channel' ); 
+               // Determine which choice variant to use for counting moves
+               $choiceIndex = array_search($row, $possibles[$energyId]);
+               if($step == 0) {
+                   // First move - use the variant the player just selected
+                   $movesToCheck = count($this->channels[$channel][$choiceIndex]);
+               } else {
+                   // Subsequent moves - use the previously selected variant
+                   $currentChoice = self::getGameStateValue('choice');
+                   $movesToCheck = count($this->channels[$channel][$currentChoice]);
                }
-               else
-               {
-                   $this->gamestate->nextState( 'next' );               
-               }
+               
+               // Always update state and go back to channel state
+               // The argChannel() function will set undo=1 when all moves are complete
+               // which triggers the confirm/cancel buttons on the client
+               self::setGameStateValue( 'alreadyMoved', self::getGameStateValue( 'alreadyMoved') * 100 + $energyId);
+               self::setGameStateValue( 'step', $step+1);
+               self::setGameStateValue( 'choice', $choiceIndex);
+               $this->gamestate->nextState( 'channel' );
             }
         }
         else
@@ -615,6 +622,13 @@ class Undochakra extends Table
         {
             throw new feException( "Not a valid move");
         }
+    }
+    
+    function actConfirm()
+    {
+        self::checkAction( 'actConfirm' );
+        // Player confirms the channel moves - proceed to next state
+        $this->gamestate->nextState( 'next' );
     }
     
     function actChannel( $id )
@@ -1089,6 +1103,7 @@ class Undochakra extends Table
         $player_id = self::getActivePlayerId();
         $channel = self::getGameStateValue( 'channel');
         $step = self::getGameStateValue( 'step');
+        $choice = self::getGameStateValue( 'choice');
         $am = self::getGameStateValue( 'alreadyMoved');
         $alreadyMoved = array();
         while($am>0)
@@ -1100,10 +1115,24 @@ class Undochakra extends Table
         $ret = array();
         $ret['channel'] = $channel;
         $ret['step'] = $step;
-        $ret['undo'] = ($step > 0 && self::getGameStateValue( 'withUndo') == 1)?1:0;
+        
+        // Only set undo=1 when ALL moves for this channel are complete
+        $totalMoves = 0;
+        if($channel == 8) {
+            $totalMoves = 1; // Channel 8 is special case
+        } else if($step > 0 && isset($this->channels[$channel][$choice])) {
+            $totalMoves = count($this->channels[$channel][$choice]);
+        }
+        $allMovesComplete = ($step > 0 && $step >= $totalMoves);
+        $ret['undo'] = ($allMovesComplete && self::getGameStateValue( 'withUndo') == 1)?1:0;
         $ret['inspiration'] = self::getUniqueValueFromDB( "SELECT id FROM inspiration where player_id ='".$player_id."' and location = 'channel' and location_arg=".$channel);// NOI18N
         
         $ret['possibles'] = array();
+        
+        // If all moves are complete, don't calculate possibles - just wait for confirm/undo
+        if($allMovesComplete) {
+            return $ret;
+        }
         
         $table = $this->getEnergiesTable();
         

@@ -44,9 +44,12 @@ function (dojo, declare) {
             this.possibles = {};
             this.selectedEnergyId = null;
             this.inspirationsNotBlocked = 5;
+            this.channelStep = 0;
+            this.channelUndo = 0;
             
-            // Pending action data for confirmation
+            // Undo confirmation system
             this.pendingAction = null;
+            this.pendingActionData = null;
             
             this.translatableTexts = {
                     "cancel": 'Cancel',
@@ -290,16 +293,35 @@ function (dojo, declare) {
 	            case 'channel':
 	            	var id = "#inspiration_"+this.getActivePlayerId()+"_"+args.args.inspiration;
 	            	this.possibles = args.args.possibles;
+	            	this.channelStep = args.args.step;
+	            	this.channelUndo = args.args.undo;
 	            	
 	                this.selectedEnergyId = null;
 	            	dojo.query(id).addClass("currentInspiration");
-	            	if( this.isCurrentPlayerActive() )
+	            	
+	            	if( this.isCurrentPlayerActive())
 	                { 
-		            	for(var id in this.possibles)
-		                {
-		            		dojo.addClass("energy_"+id, 'selectable' );
-		                }
+	            	    // If undo is available (==1), all moves are complete - wait for confirmation
+	            	    // Otherwise, update which energies are selectable based on the possibles array
+	            	    if(args.args.undo != 1)
+	                    { 
+	                        // Clear selectable from all energies first
+	                        dojo.query(".energy.selectable").removeClass("selectable");
+	                        
+	                        // Add selectable to energies in the possibles list
+		            	    for(var id in this.possibles)
+		                    {
+		            		    dojo.addClass("energy_"+id, 'selectable' );
+		                    }
+	                    }
+	                    else
+	                    {
+	                        // All moves complete - clear selectable from all energies
+	                        dojo.query(".energy.selectable").removeClass("selectable");
+	                    }
 	                }
+	            	// Note: Don't clear 'selected' class from destinations here
+	            	// We want to preserve visual feedback of which destinations were selected during channel sequence
 	            	
 	                break;
 	                
@@ -327,10 +349,16 @@ function (dojo, declare) {
         //
         onLeavingState: function( stateName )
         {
+            // For channel state, DON'T clear anything - onEnteringState handles it
+            // This allows the multi-step channel flow to work properly
+            if(stateName !== 'channel') {
+                dojo.query(".selectable").removeClass("selectable");
+                dojo.query(".selected").removeClass("selected");
+                dojo.query(".currentInspiration").removeClass("currentInspiration");
+            }
+            // Note: When transitioning from channel to another state, the new state's
+            // onEnteringState will clean up as needed
             
-            dojo.query(".selectable").removeClass("selectable"); 
-            dojo.query(".selected").removeClass("selected"); 
-            dojo.query(".currentInspiration").removeClass("currentInspiration"); 
     		dojo.query(".appears").removeClass('appears' );              
         }, 
 
@@ -341,29 +369,37 @@ function (dojo, declare) {
         {
                       
             if( this.isCurrentPlayerActive() )
-            {            
+            {
+                // Remove all existing action buttons first to avoid duplicates
+                dojo.empty('generalactions');
+                
+                // Show confirm/cancel buttons if there's a pending action
+                if(this.pendingAction !== null)
+                {
+                    this.addActionButton('confirm_button', _(this.translatableTexts.confirm), 'onConfirmAction', null, false, 'blue');
+                    this.addActionButton('cancelaction_button', _(this.translatableTexts.cancel), 'onCancelAction', null, false, 'red');
+                    return;
+                }
+                
                 switch( stateName )
                 {
 	            case 'channel':
 	            case 'pickColor':
-	            	if(args.step == 0)
+	            	// Always show Confirm button after making moves (when undo is available)
+	            	// This ensures players must confirm their channel sequence
+	            	// NOTE: Must use args parameter, not this.channelUndo, because 
+	            	// onUpdateActionButtons is called BEFORE onEnteringState updates the stored values
+	            	if(args && args.undo == 1)
             		{
-                  	 this.addActionButton('cancel_button', _(this.translatableTexts.cancel) , 'onCancel');
+            		    this.addActionButton('confirm_button', _(this.translatableTexts.confirm), 'onConfirmAction', null, false, 'blue');
+                  	    this.addActionButton('undo2_button', _(this.translatableTexts.cancel) , 'onUndo');
             		}
-	            	if(args.undo == 1)
+            		else if(args && args.step == 0)
             		{
-                  	 this.addActionButton('undo2_button', _(this.translatableTexts.cancel) , 'onUndo');
+            		    // At the beginning, just show cancel to back out
+                  	    this.addActionButton('cancel_button', _(this.translatableTexts.cancel) , 'onCancel');
             		}
 		            	break;
-		            	
-		        case 'take':
-		            // If there's a pending action, show confirmation buttons
-		            if(this.pendingAction)
-		            {
-		                this.addActionButton('confirm_button', _(this.translatableTexts.confirm), 'onConfirmAction', null, false, 'blue');
-		                this.addActionButton('cancel_action_button', _(this.translatableTexts.cancel), 'onCancelAction', null, false, 'red');
-		            }
-		            break;
                 }
             }
         },        
@@ -402,43 +438,46 @@ function (dojo, declare) {
         
         onConfirmAction:function(event)
         {
-            if(this.pendingAction)
+            // Handle pending action (for take/meditate)
+            if(this.pendingAction !== null)
             {
                 // Execute the pending action
                 var action = this.pendingAction;
+                var data = this.pendingActionData;
+                
+                // Clear pending state
                 this.pendingAction = null;
+                this.pendingActionData = null;
                 
-                // Remove confirmation buttons
-                this.removeActionButtons();
+                // Execute the AJAX call
+                this.ajaxcall(action.url, action.params, this, function( result ) {}, function( is_error ) { });
                 
-                // Make the AJAX call
-                this.ajaxcall(action.url, action.params, this, function(result){}, function(is_error){});
+                // Update action buttons
+                this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
+            }
+            // Handle channel/pickColor confirmation (when undo is available)
+            else if(this.stateName == "channel" && this.channelUndo == 1 && this.checkAction( "actConfirm" ))
+            {
+                // Confirm the channel moves - proceed to next state
+                this.ajaxcall('/undochakra/undochakra/actConfirm.html', {
+                    lock: true
+                }, this, function( result ) {}, function( is_error ) { });
             }
         },
         
         onCancelAction:function(event)
         {
-            if(this.pendingAction)
-            {
-                // Clear the pending action
-                this.pendingAction = null;
-                
-                // Remove confirmation buttons
-                this.removeActionButtons();
-                
-                // Clear visual selections
-                dojo.query(".selected").removeClass("selected");
-                dojo.query(".selectable").removeClass("selectable");
-                
-                // Re-setup the state to restore selectable elements
-                this.onUpdateActionButtons(this.stateName, this.gamedatas);
-                
-                // Restore selectable state for 'take' state
-                if(this.stateName == 'take')
-                {
-                    this.onEnteringState(this.stateName, {args: this.gamedatas.gamestate.args});
-                }
-            }
+            // Clear the pending action
+            this.pendingAction = null;
+            this.pendingActionData = null;
+            
+            // Restore visual state (remove selections)
+            dojo.query(".selected").removeClass("selected");
+            dojo.query(".selectable").removeClass("selectable");
+            
+            // Trigger state re-entry to restore proper UI state
+            this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
+            this.onEnteringState(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
         },
         
         onColor:function(event)
@@ -453,24 +492,35 @@ function (dojo, declare) {
             		{
             			this.confirmationDialog( _(this.translatableTexts.confirmation_meditate), dojo.hitch( this, function() {
 
-            				dojo.query(".selectable").removeClass("selectable"); 
-                    		this.ajaxcall('/undochakra/undochakra/actColor.html', {
-        	 	                   lock:true,
-        	 	                  color:color
-        	 	                },this, function( result ) {
-        	 	                }, function( is_error ) { } );
+            				dojo.query(".leftside .meditation.selectable").removeClass("selectable");
+            				// Mark the selected meditation color to keep it glowing
+            				dojo.addClass(event.currentTarget, "selected");
+            				
+                    		this.pendingAction = {
+                    		    url: '/undochakra/undochakra/actColor.html',
+                    		    params: {
+                    		        lock: true,
+                    		        color: color
+                    		    }
+                    		};
+                    		this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
                         } ) ); 
                         return;
             		}
             		else
             		{
-
-                        dojo.query(".selectable").removeClass("selectable"); 
-                		this.ajaxcall('/undochakra/undochakra/actColor.html', {
-    	 	                   lock:true,
-    	 	                  color:color
-    	 	                },this, function( result ) {
-    	 	                }, function( is_error ) { } );
+                        dojo.query(".leftside .meditation.selectable").removeClass("selectable");
+                        // Mark the selected meditation color to keep it glowing
+                        dojo.addClass(event.currentTarget, "selected");
+                        
+                		this.pendingAction = {
+                		    url: '/undochakra/undochakra/actColor.html',
+                		    params: {
+                		        lock: true,
+                		        color: color
+                		    }
+                		};
+                		this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
             		}
             		
             		
@@ -487,14 +537,16 @@ function (dojo, declare) {
             		
             		var id = event.currentTarget.id.split('_')[3];            		
 
+                    // Only clear selectable classes, not selected
+                    // The state transition will handle clearing selections if needed
                     dojo.query(".selectable").removeClass("selectable"); 
-                    dojo.query(".selected").removeClass("selected"); 
             		
+            		// Execute channel selection immediately - this transitions to the channel state
+            		// where the player will select energies to move
             		this.ajaxcall('/undochakra/undochakra/actChannel.html', {
-	 	                   lock:true,
-	 	                  id:id
-	 	                },this, function( result ) {
-	 	                }, function( is_error ) { } );
+            		    lock: true,
+            		    id: id
+            		}, this, function( result ) {}, function( is_error ) { });
             	}
             }
         },
@@ -517,7 +569,17 @@ function (dojo, declare) {
                     
                     if(this.inspirationsNotBlocked > 1 || row== 1)
                     {
-                        // Store pending action for confirmation
+                        // Mark destination placeholders as selected - highlight as many as energies selected
+                        dojo.query(".energyph.selectable").removeClass("selectable");
+                        
+                        // Count selected energies and highlight that many EMPTY placeholders in the target row
+                        var numSelected = dojo.query("#maya .energy.selected").length;
+                        var emptyPlaceholders = dojo.query(".energyph.row" + row + ":empty");
+                        for(var i = 0; i < Math.min(numSelected, emptyPlaceholders.length); i++) {
+                            dojo.addClass(emptyPlaceholders[i], "selected");
+                        }
+                        
+                        // Store pending action instead of executing immediately
                         this.pendingAction = {
                             url: '/undochakra/undochakra/actTake.html',
                             params: {
@@ -526,14 +588,22 @@ function (dojo, declare) {
                                 row: row
                             }
                         };
-                        
-                        // Update action buttons to show confirm/cancel
-                        this.onUpdateActionButtons(this.stateName, {});
+                        this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
                     }
                     else
                     	{
                     	 this.confirmationDialog( _(this.translatableTexts.confirmation_inspirations), dojo.hitch( this, function() {
-                             // Store pending action for confirmation
+
+                             // Mark destination placeholders as selected - highlight as many as energies selected
+                             dojo.query(".energyph.selectable").removeClass("selectable");
+                             
+                             // Count selected energies and highlight that many EMPTY placeholders in the target row
+                             var numSelected = dojo.query("#maya .energy.selected").length;
+                             var emptyPlaceholders = dojo.query(".energyph.row" + row + ":empty");
+                             for(var i = 0; i < Math.min(numSelected, emptyPlaceholders.length); i++) {
+                                 dojo.addClass(emptyPlaceholders[i], "selected");
+                             }
+                             
                              this.pendingAction = {
                                  url: '/undochakra/undochakra/actTake.html',
                                  params: {
@@ -542,28 +612,21 @@ function (dojo, declare) {
                                      row: row
                                  }
                              };
-                             
-                             // Update action buttons to show confirm/cancel
-                             this.onUpdateActionButtons(this.stateName, {});
+                             this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
                          } ) ); 
                          return;
                     	}
             		}
                     else
                     {     
-                        // Store pending action for confirmation (Move action)
-                        this.pendingAction = {
-                            url: '/undochakra/undochakra/actMove.html',
-                            params: {
-                                lock: true,
-                                energyId: this.selectedEnergyId,
-                                row: row
-                            }
-                        };
-                        
-                        // Update action buttons to show confirm/cancel
-                        this.onUpdateActionButtons(this.stateName, {});
-                    	
+                        // For channel actions: just execute the move
+                        // The energy animation itself provides visual feedback
+                        // Don't modify placeholder classes - the server will update state for next move
+                        this.ajaxcall('/undochakra/undochakra/actMove.html', {
+                            lock: true,
+                            energyId: this.selectedEnergyId,
+                            row: row
+                        }, this, function( result ) {}, function( is_error ) { });
                     }
             	}
             }
@@ -651,15 +714,15 @@ function (dojo, declare) {
 	            		}          		
 	            	
 		            	var nb = dojo.query("#maya .energy.selected").length;
+		            	// First remove all selectable classes from board
+		            	dojo.query("#playertable_"+this.player_id+" .energyph").removeClass("selectable");
+		            	
+		            	// Then add selectable to valid destinations
 		            	for(var row = 1;row<=9;row++)
 		            	{
 		            		if(this.frees[row]>=nb && nb>0)
 		            		{
 		            			dojo.query("#playertable_"+this.player_id+" .row"+row+".energyph:empty").addClass("selectable"); 
-		            		}
-		            		else
-		            		{
-		            			dojo.query("#playertable_"+this.player_id+" .row"+row+".energyph").removeClass("selectable"); 
 		            		}
 		            	}
 	            	}
@@ -680,16 +743,18 @@ function (dojo, declare) {
         		this.selectedEnergyId  = event.currentTarget.id.split('_')[1];
         		if(this.possibles[this.selectedEnergyId].length == 1)
         		{
+        			// Execute move immediately if only one destination
+        			// The server handles the multi-step channel flow
         			this.ajaxcall('/undochakra/undochakra/actMove.html', {
-	 	                   lock:true,
-	 	                   energyId:this.selectedEnergyId,
-	 	                   row:this.possibles[this.selectedEnergyId][0]
-	 	                },this, function( result ) {
-	 	                }, function( is_error ) { } );
+        			    lock: true,
+        			    energyId: this.selectedEnergyId,
+        			    row: this.possibles[this.selectedEnergyId][0]
+        			}, this, function( result ) {}, function( is_error ) { });
         		}
         		else
         		{
-                    dojo.query(".selected").removeClass("selected"); 
+                    // Only clear selected class from energies, not from meditation or destinations
+                    dojo.query(".energy.selected").removeClass("selected"); 
             		event.currentTarget.classList.add('selected');
             		
             		for(var r in this.possibles[this.selectedEnergyId])
