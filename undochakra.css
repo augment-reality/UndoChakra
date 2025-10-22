@@ -254,6 +254,20 @@
     drop-shadow: 0px 0px 0px 0px yellow;
 }
 
+/* Override opacity and animation for placeholders that contain energy tokens */
+.placeholder.selectable:not(:empty) {
+    opacity: 1 !important;
+    animation: none !important;
+    -webkit-animation: none !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+}
+
+/* Ensure energy tokens inside selectable placeholders are always visible */
+.placeholder.selectable .energy {
+    opacity: 1 !important;
+}
+
 .placeholder.selected {
 	opacity: 0.5;	
     background-color: lime;

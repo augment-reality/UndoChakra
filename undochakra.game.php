@@ -1360,6 +1360,9 @@ class Undochakra extends Table
         
         if(!$finished)
         {
+            $current_active_player = self::getActivePlayerId();
+            $current_player_no = self::getUniqueValueFromDB("SELECT player_no FROM player where player_id=".$current_active_player);
+            $num_players = count($players);
             
             foreach( $players as $player_id => $player )
             {
@@ -1373,9 +1376,15 @@ class Undochakra extends Table
                 {
                     $finished = true;                    
                     self::setGameStateValue( 'finished', 1 );
-                    self::notifyAllPlayers( "notee", clienttranslate('${player_name} has harmonized five Chakras. This game will end at the end of this round.'), array(
-                        'player_name' => $players[$player_id]['player_name']
-                    ) );
+                    
+                    // Determine message based on current player position
+                    if($current_player_no == 1 || $current_player_no == $num_players) {
+                        // First or last player - this IS the last round
+                        throw new BgaUserException(clienttranslate("This is the last round."));
+                    } else {
+                        // Not first or last - next round is the last
+                        throw new BgaUserException(clienttranslate("The next round is the last round."));
+                    }
                 }
             }
         }

@@ -50,6 +50,7 @@ function (dojo, declare) {
             // Undo confirmation system
             this.pendingAction = null;
             this.pendingActionData = null;
+            this.pendingMeditationWarning = false;
             
             this.translatableTexts = {
                     "cancel": 'Cancel',
@@ -115,6 +116,8 @@ function (dojo, declare) {
         
         setup: function( gamedatas )
         {
+            // Preload the board sprite image to ensure it displays properly
+            this.ensureSpecificImageLoading(['img/boards.png']);
 
         	dojo.query('.firstPlayerPanel').forEach(dojo.destroy);
         	
@@ -225,8 +228,38 @@ function (dojo, declare) {
         	   	dojo.place(this.format_block('jstpl_energy', energy), $('maya'));  
         	}
         	
-        	this.attachToNewParent(id, phid);
-        	this.slideToObjectPos( id, phid,0,0 ).play();   	
+        	// Check if this is a channel move by looking at the target location
+        	// Channel moves go to player boards, other moves come from maya
+        	var isChannelMove = energy.location && energy.location !== 'maya' && phid.indexOf('ph_' + energy.location) === 0;
+        	
+        	if(isChannelMove) {
+        	    // Channel action: moving within a player's board
+        	    // Use simple slide without attachToNewParent to avoid DOM issues in multi-step channels
+        	    var element = dojo.byId(id);
+        	    if(element) {
+        	        dojo.style(id, 'opacity', '1');
+        	        dojo.style(id, 'visibility', 'visible');
+        	    }
+        	    var anim = this.slideToObject(id, phid);
+        	    dojo.connect(anim, 'onEnd', dojo.hitch(this, function() {
+        	        dojo.place(id, phid);
+        	        dojo.style(id, 'opacity', '1');
+        	        dojo.style(id, 'visibility', 'visible');
+        	        dojo.style(id, 'position', 'absolute');
+        	        dojo.style(id, 'top', '0px');
+        	        dojo.style(id, 'left', '0px');
+        	    }));
+        	    anim.play();
+        	} else {
+        	    // Normal move (take action from maya, etc.) - use standard attachToNewParent
+        	    dojo.style(id, 'opacity', '1');
+        	    this.attachToNewParent(id, phid);
+        	    var anim = this.slideToObjectPos(id, phid, 0, 0);
+        	    dojo.connect(anim, 'beforeBegin', dojo.hitch(this, function() {
+        	        dojo.style(id, 'opacity', '1');
+        	    }));
+        	    anim.play();
+        	}   	
         	if(energy.color == "white")
         	{
         		this.addTooltipHtml( id, this.format_block('jstpl_tooltip_common', {title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), description: _(this.translatableTexts.tooltip_energywhite_description) })); 		
@@ -378,6 +411,12 @@ function (dojo, declare) {
                 {
                     this.addActionButton('confirm_button', _(this.translatableTexts.confirm), 'onConfirmAction', null, false, 'blue');
                     this.addActionButton('cancelaction_button', _(this.translatableTexts.cancel), 'onCancelAction', null, false, 'red');
+                    
+                        // Update status bar if meditation warning is needed
+                        if(this.pendingMeditationWarning && $('pagemaintitletext'))
+                        {
+                            $('pagemaintitletext').innerHTML = "<span style='color:orange'>" + _("You have already selected that meditation token, are you sure?") + "</span>";
+                        }
                     return;
                 }
                 
@@ -448,6 +487,7 @@ function (dojo, declare) {
                 // Clear pending state
                 this.pendingAction = null;
                 this.pendingActionData = null;
+                this.pendingMeditationWarning = false;
                 
                 // Execute the AJAX call
                 this.ajaxcall(action.url, action.params, this, function( result ) {}, function( is_error ) { });
@@ -470,11 +510,29 @@ function (dojo, declare) {
             // Clear the pending action
             this.pendingAction = null;
             this.pendingActionData = null;
+            this.pendingMeditationWarning = false;
             
             // Restore visual state (remove selections)
             dojo.query(".selected").removeClass("selected");
             dojo.query(".selectable").removeClass("selectable");
             
+            // Restore the main title text if needed, using format_string_recursive to interpolate variables
+            if($('pagemaintitletext') && this.gamedatas && this.gamedatas.gamestate && this.gamedatas.gamestate.descriptionmyturn) {
+                var args = this.gamedatas.gamestate.args ? dojo.clone(this.gamedatas.gamestate.args) : {};
+                // Ensure 'you' is present for template substitution
+                if(!args.you) {
+                    if(this.gamedatas.players && this.player_id && this.gamedatas.players[this.player_id]) {
+                        args.you = this.gamedatas.players[this.player_id].name;
+                    } else {
+                        args.you = _('You');
+                    }
+                }
+                var title = this.format_string_recursive(this.gamedatas.gamestate.descriptionmyturn, args);
+                title = title.replace("{receive}", "<span class='logIcon blue'></span> &nbsp;");
+                title = title.replace("{channel}", "<span class='logIcon ichannel'></span> &nbsp;");
+                title = title.replace("{meditate}", "<span class='logIcon imeditate'></span> &nbsp;");
+                $('pagemaintitletext').innerHTML = title;
+            }
             // Trigger state re-entry to restore proper UI state
             this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
             this.onEnteringState(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
@@ -488,42 +546,26 @@ function (dojo, declare) {
             	if(event.currentTarget.classList.contains('selectable')  && this.checkAction( "actColor" ) ) { 
             		
             		var color = event.currentTarget.id.split('_')[1];            		
-            		if(this.stateName == "take" && !dojo.hasClass("meditation_"+this.player_id+"_"+color,"hidden"))
-            		{
-            			this.confirmationDialog( _(this.translatableTexts.confirmation_meditate), dojo.hitch( this, function() {
-
-            				dojo.query(".leftside .meditation.selectable").removeClass("selectable");
-            				// Mark the selected meditation color to keep it glowing
-            				dojo.addClass(event.currentTarget, "selected");
-            				
-                    		this.pendingAction = {
-                    		    url: '/undochakra/undochakra/actColor.html',
-                    		    params: {
-                    		        lock: true,
-                    		        color: color
-                    		    }
-                    		};
-                    		this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
-                        } ) ); 
-                        return;
-            		}
-            		else
-            		{
-                        dojo.query(".leftside .meditation.selectable").removeClass("selectable");
-                        // Mark the selected meditation color to keep it glowing
-                        dojo.addClass(event.currentTarget, "selected");
-                        
-                		this.pendingAction = {
-                		    url: '/undochakra/undochakra/actColor.html',
-                		    params: {
-                		        lock: true,
-                		        color: color
-                		    }
-                		};
-                		this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
-            		}
             		
+            		// Check if this meditation token is already revealed (during take state)
+            		var isAlreadyRevealed = this.stateName == "take" && !dojo.hasClass("meditation_"+this.player_id+"_"+color,"hidden");
             		
+                    dojo.query(".leftside .meditation.selectable").removeClass("selectable");
+                    // Mark the selected meditation color to keep it glowing
+                    dojo.addClass(event.currentTarget, "selected");
+                    
+            		this.pendingAction = {
+            		    url: '/undochakra/undochakra/actColor.html',
+            		    params: {
+            		        lock: true,
+            		        color: color
+            		    }
+            		};
+            		
+            		// Set the warning flag if meditation is already revealed
+            		this.pendingMeditationWarning = isAlreadyRevealed;
+            		
+            		this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
             	}
             }
         },
@@ -741,21 +783,30 @@ function (dojo, declare) {
     		{
         		
         		this.selectedEnergyId  = event.currentTarget.id.split('_')[1];
-        		if(this.possibles[this.selectedEnergyId].length == 1)
+        		
+        		// Count how many destination options exist
+        		var destinationCount = 0;
+        		var singleDestination = null;
+        		for(var choice in this.possibles[this.selectedEnergyId]) {
+        		    destinationCount++;
+        		    singleDestination = this.possibles[this.selectedEnergyId][choice];
+        		}
+        		
+        		if(destinationCount == 1)
         		{
         			// Execute move immediately if only one destination
         			// The server handles the multi-step channel flow
         			this.ajaxcall('/undochakra/undochakra/actMove.html', {
         			    lock: true,
         			    energyId: this.selectedEnergyId,
-        			    row: this.possibles[this.selectedEnergyId][0]
+        			    row: singleDestination
         			}, this, function( result ) {}, function( is_error ) { });
         		}
         		else
         		{
-                    // Only clear selected class from energies, not from meditation or destinations
+                    // Clear any previous selections
                     dojo.query(".energy.selected").removeClass("selected"); 
-            		event.currentTarget.classList.add('selected');
+            		// Don't add selected class to energy - no visual feedback during channel moves
             		
             		for(var r in this.possibles[this.selectedEnergyId])
 	                {
