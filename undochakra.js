@@ -435,8 +435,13 @@ function (dojo, declare) {
             		}
             		else if(args && args.step == 0)
             		{
-            		    // At the beginning, just show cancel to back out
+            		    // At the beginning, use onCancel to completely exit the channel action
                   	    this.addActionButton('cancel_button', _(this.translatableTexts.cancel) , 'onCancel');
+            		}
+            		else
+            		{
+            		    // During channel steps, use onUndo to undo the current move
+                  	    this.addActionButton('undo_button', _(this.translatableTexts.cancel) , 'onUndo');
             		}
 		            	break;
                 }
@@ -550,6 +555,9 @@ function (dojo, declare) {
             		// Check if this meditation token is already revealed (during take state)
             		var isAlreadyRevealed = this.stateName == "take" && !dojo.hasClass("meditation_"+this.player_id+"_"+color,"hidden");
             		
+            		// Check if there are any hidden (unflipped) meditation tokens remaining
+            		var hasHiddenTokens = dojo.query(".leftside .meditation.hidden").length > 0;
+            		
                     dojo.query(".leftside .meditation.selectable").removeClass("selectable");
                     // Mark the selected meditation color to keep it glowing
                     dojo.addClass(event.currentTarget, "selected");
@@ -562,8 +570,8 @@ function (dojo, declare) {
             		    }
             		};
             		
-            		// Set the warning flag if meditation is already revealed
-            		this.pendingMeditationWarning = isAlreadyRevealed;
+            		// Set the warning flag only if meditation is already revealed AND there are still hidden tokens
+            		this.pendingMeditationWarning = isAlreadyRevealed && hasHiddenTokens;
             		
             		this.onUpdateActionButtons(this.gamedatas.gamestate.name, this.gamedatas.gamestate);
             	}
