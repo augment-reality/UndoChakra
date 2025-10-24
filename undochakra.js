@@ -669,14 +669,16 @@ function (dojo, declare) {
             		}
                     else
                     {     
-                        // For channel actions: just execute the move
+                        // For channel actions: add a delay to give animation time and prevent "action in progress" warnings
                         // The energy animation itself provides visual feedback
                         // Don't modify placeholder classes - the server will update state for next move
-                        this.ajaxcall('/undochakra/undochakra/actMove.html', {
-                            lock: true,
-                            energyId: this.selectedEnergyId,
-                            row: row
-                        }, this, function( result ) {}, function( is_error ) { });
+                        setTimeout(dojo.hitch(this, function() {
+                            this.ajaxcall('/undochakra/undochakra/actMove.html', {
+                                lock: true,
+                                energyId: this.selectedEnergyId,
+                                row: row
+                            }, this, function( result ) {}, function( is_error ) { });
+                        }), 1000);
                     }
             	}
             }
@@ -802,13 +804,15 @@ function (dojo, declare) {
         		
         		if(destinationCount == 1)
         		{
-        			// Execute move immediately if only one destination
+        			// Execute move immediately if only one destination, but add delay to prevent race conditions
         			// The server handles the multi-step channel flow
-        			this.ajaxcall('/undochakra/undochakra/actMove.html', {
-        			    lock: true,
-        			    energyId: this.selectedEnergyId,
-        			    row: singleDestination
-        			}, this, function( result ) {}, function( is_error ) { });
+        			setTimeout(dojo.hitch(this, function() {
+        			    this.ajaxcall('/undochakra/undochakra/actMove.html', {
+        			        lock: true,
+        			        energyId: this.selectedEnergyId,
+        			        row: singleDestination
+        			    }, this, function( result ) {}, function( is_error ) { });
+        			}), 1000);
         		}
         		else
         		{
@@ -851,6 +855,10 @@ function (dojo, declare) {
             dojo.subscribe( 'harmonize', this, "notif_harmonize" );
             dojo.subscribe( 'objo', this, "notif_objo" );
             dojo.subscribe( 'yinyang', this, "notif_yinyang" );
+            
+            // Set synchronous notifications with durations to prevent animations from being cut off
+            this.notifqueue.setSynchronous( 'energy', 800 );
+            this.notifqueue.setSynchronous( 'newenergy', 800 );
         },  
 
         notif_objo: function( notif )
