@@ -49,7 +49,7 @@ $machinestates = array(
         "descriptionmyturn" => clienttranslate('${you} must channel your energies'),
         "type" => "activeplayer",
         "args" => "argChannel",
-        "possibleactions" => array( "actMove", "actCancel", "actUndo", "actConfirm"),
+        "possibleactions" => array( "actMove", "actCancel", "actUndo"),
         "transitions" => array( "channel" => STATE_CHANNEL, "take" => STATE_TAKE, "next" => STATE_CHECK_FINISH, "pickColor" => STATE_PICK_COLOR, "zombiePass" => STATE_CHECK_FINISH  )
     ),
     

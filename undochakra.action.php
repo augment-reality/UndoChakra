@@ -100,15 +100,6 @@
         self::ajaxResponse( );
     }
     
-    public function actConfirm()
-    {
-        self::setAjaxMode();
-        
-        $this->game->actConfirm();
-        
-        self::ajaxResponse( );
-    }
-    
 
   }
   
