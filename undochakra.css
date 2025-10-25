@@ -16,6 +16,25 @@
 
 /********* You can start writing your CSS below this line: **********/
 
+/* Fix action button positioning - override BGA default relative positioning */
+#undo_button, #undo2_button, #cancel_button, #confirm_button, #cancelaction_button {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+    color: white !important;
+}
+
+/* Ensure generalactions container has proper width */
+#generalactions {
+    width: auto !important;
+    min-width: fit-content !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    vertical-align: middle !important;
+}
+
 @font-face {
  font-family: "Connie";
  src: url("img/Connie-Regular.ttf")
@@ -252,6 +271,64 @@
     -webkit-animation: colorpulse 8s infinite;
     animation: colorpulse 8s infinite;
     drop-shadow: 0px 0px 0px 0px yellow;
+}
+
+/* Ensure energy tokens inside selectable placeholders always have full opacity */
+.placeholder.selectable .energy {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Also ensure when placeholder is not empty, the energy inside is visible */
+.placeholder.selectable:not(:empty) {
+    opacity: 1 !important;
+}
+
+.placeholder.selectable:not(:empty) .energy {
+    opacity: 1 !important;
+}
+
+/* Stop animation on placeholders that contain energy tokens during channel moves */
+.placeholder.selectable:not(:empty),
+.placeholder.selected:not(:empty) {
+    -webkit-animation: none !important;
+    animation: none !important;
+    box-shadow: none !important;
+}
+
+:root {
+	--selected-color: rgb(236, 140, 220);
+}
+
+.placeholder.selected {
+	opacity: 0.5;	
+	background-color: var(--selected-color);
+	box-shadow: 0px 0px 8px 4px var(--selected-color);
+	-webkit-animation: selectedpulse 3s infinite;
+	animation: selectedpulse 3s infinite;
+}
+
+/* Color-specific selections for each chakra row */
+.row2.placeholder.selected { --selected-color: #8d428e; } /* purple */
+.row3.placeholder.selected { --selected-color: #0063a8; } /* dark blue */
+.row4.placeholder.selected { --selected-color: #6abfec; } /* blue */
+.row5.placeholder.selected { --selected-color: #94b322; } /* green */
+.row6.placeholder.selected { --selected-color: #ffec3a; } /* yellow */
+.row7.placeholder.selected { --selected-color: #f59b13; } /* orange */
+.row8.placeholder.selected { --selected-color: #e5211e; } /* red */
+.row9.placeholder.selected { --selected-color: #333; } /* earth/black */
+.row1.placeholder.selected { --selected-color: #979797; } /* universe/grey */
+
+@-webkit-keyframes selectedpulse {
+0%   { background-color: var(--selected-color); box-shadow: 0px 0px 8px 4px var(--selected-color); opacity: 0.5; }
+50%  { background-color: var(--selected-color); box-shadow: 0px 0px 12px 6px var(--selected-color); opacity: 0.7; }
+100% { background-color: var(--selected-color); box-shadow: 0px 0px 8px 4px var(--selected-color); opacity: 0.5; }
+}
+
+@keyframes selectedpulse {
+0%   { background-color: var(--selected-color); box-shadow: 0px 0px 8px 4px var(--selected-color); opacity: 0.5; }
+50%  { background-color: var(--selected-color); box-shadow: 0px 0px 12px 6px var(--selected-color); opacity: 0.7; }
+100% { background-color: var(--selected-color); box-shadow: 0px 0px 8px 4px var(--selected-color); opacity: 0.5; }
 }
 
 @-webkit-keyframes colorpulse {
