@@ -336,6 +336,8 @@ class Undochakra extends Table
         
         $sql = "SELECT id, color, location, row, col FROM energy where location <> 'bag'";
         $result['energies'] = self::getObjectListFromDB( $sql );
+        
+        $result['isFinalRound'] = self::getGameStateValue('finished');
   
         return $result;
     }
@@ -1376,6 +1378,7 @@ class Undochakra extends Table
                     self::notifyAllPlayers( "notee", clienttranslate('${player_name} has harmonized five Chakras. This game will end at the end of this round.'), array(
                         'player_name' => $players[$player_id]['player_name']
                     ) );
+                    self::notifyAllPlayers( "finalRound", '', array() );
                 }
             }
         }

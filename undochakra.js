@@ -199,7 +199,10 @@ function (dojo, declare) {
             dojo.query('.energyph').connect('onclick', this, 'onEnergyBoardPlaceHolder'); 
             dojo.query('.placeholder.channel').connect('onclick', this, 'onChannel'); 
             dojo.query('.color').connect('onclick', this, 'onColor'); 
-            dojo.query('.meditation').connect('onclick', this, 'onColor'); 
+            dojo.query('.meditation').connect('onclick', this, 'onColor');
+            
+            // Note: Click handlers for energy tokens are attached individually in moveEnergy()
+            // to ensure they work correctly after DOM manipulation 
             
              this.addTooltipHtmlToClass( 'inspiration', this.format_block('jstpl_tooltip_common', {title: _(this.translatableTexts.tooltip_inspiration_title), description: _(this.translatableTexts.tooltip_inspiration_description) }));
             
@@ -262,6 +265,12 @@ function (dojo, declare) {
             this.addTooltipHtmlToClass( 'channel_'+i, this.format_block('jstpl_tooltip_common', {title: _(this.translatableTexts.tooltip_channel_title), description: _(this.translatableTexts['tooltip_channel'+i+'_description']) }));
             	}
             
+            // Store final round flag and update title if needed
+            this.isFinalRound = gamedatas.isFinalRound == 1;
+            if(this.isFinalRound) {
+                this.updateTitleForFinalRound();
+            }
+            
             // Setup game notifications to handle (see "setupNotifications" method below)
             this.setupNotifications();
         },
@@ -304,18 +313,21 @@ function (dojo, declare) {
         	            energyElement.style.setProperty('opacity', '1', 'important');
         	        }
         	        
-        	        // Re-add tooltip after animation (can be lost during DOM manipulation)
-        	        if(energy.color == "white") {
-        	            this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
-        	                title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
-        	                description: _(this.translatableTexts.tooltip_energywhite_description)
-        	            }));
-        	        } else {
-        	            this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
-        	                title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
-        	                description: _(this.translatableTexts.tooltip_energy_description)
-        	            }));
-        	        }
+        	        // Re-add tooltip after animation and DOM manipulation
+        	        // Use a small delay to ensure DOM is fully updated
+        	        setTimeout(dojo.hitch(this, function() {
+        	            if(energy.color == "white") {
+        	                this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
+        	                    title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
+        	                    description: _(this.translatableTexts.tooltip_energywhite_description)
+        	                }));
+        	            } else {
+        	                this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
+        	                    title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
+        	                    description: _(this.translatableTexts.tooltip_energy_description)
+        	                }));
+        	            }
+        	        }), 100);
         	    }));
         	    anim.play();
         	} else {
@@ -324,16 +336,39 @@ function (dojo, declare) {
         	    this.slideToObjectPos(id, phid, 0, 0).play();
         	}
         	
-        	// Re-add tooltip after move (in case it was lost during DOM manipulation)
-        	if(energy.color == "white")
-        	{
-        		this.addTooltipHtml( id, this.format_block('jstpl_tooltip_common', {title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), description: _(this.translatableTexts.tooltip_energywhite_description) })); 		
+        	// Attach click handler immediately (before setTimeout)
+        	// Disconnect any existing handlers first to prevent duplicates
+        	var energyNode = dojo.byId(id);
+        	if(energyNode) {
+        	    // Clear any existing Dojo connections by storing a reference
+        	    if(energyNode._dojoConnections) {
+        	        energyNode._dojoConnections.forEach(function(conn) {
+        	            dojo.disconnect(conn);
+        	        });
+        	    }
+        	    // Attach new handler and store the connection
+        	    var connection = dojo.connect(energyNode, 'onclick', this, 'onEnergyMaya');
+        	    energyNode._dojoConnections = [connection];
         	}
-        	else
-        	{
-        		this.addTooltipHtml( id, this.format_block('jstpl_tooltip_common', {title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), description: _(this.translatableTexts.tooltip_energy_description) }));
-        	}
-        	dojo.query('#'+id).connect('onclick', this, 'onEnergyMaya'); 
+        	
+        	// Always ensure tooltip is present after move (in case it was lost during DOM manipulation)
+        	// Use setTimeout to ensure DOM is settled before adding tooltip
+        	setTimeout(dojo.hitch(this, function() {
+        	    if(energy.color == "white")
+        	    {
+        	        this.addTooltipHtml( id, this.format_block('jstpl_tooltip_common', {
+        	            title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
+        	            description: _(this.translatableTexts.tooltip_energywhite_description)
+        	        })); 		
+        	    }
+        	    else
+        	    {
+        	        this.addTooltipHtml( id, this.format_block('jstpl_tooltip_common', {
+        	            title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
+        	            description: _(this.translatableTexts.tooltip_energy_description)
+        	        }));
+        	    }
+        	}), 100);
         },
         
         moveInspiration: function(inspiration)
@@ -357,24 +392,26 @@ function (dojo, declare) {
         {
         	this.stateName = stateName;
             switch( stateName )
-            {
-            case 'take':
-	            	 // Check if player has no inspiration tokens left
-	            	 if(args.args.inspirationsLeft == 0)
-	            	 {
-                         // Player must meditate - show warning in orange with soft black glow
-                         $('pagemaintitletext').innerHTML = "<span style='color:black; font-weight:bold;'>" + _("You must meditate or can only play tokens to your Bhagya Bubbles.") + "</span>";
-	            	 }
-	            	 else
-	            	 {
-	            	     // Normal state - show all options
-	            	     $('pagemaintitletext').innerHTML = $('pagemaintitletext').innerHTML.replace("{receive}", '<span class="logIcon blue" ></span> &nbsp;' );
-	                     $('pagemaintitletext').innerHTML = $('pagemaintitletext').innerHTML.replace("{channel}", '<span class="logIcon ichannel"></span> &nbsp;' );
-	                     $('pagemaintitletext').innerHTML = $('pagemaintitletext').innerHTML.replace("{meditate}", '<span class="logIcon imeditate"></span> &nbsp;' );
-	            	 }
-	                	
+            {            
+	            case 'take':
+	                // Replace icon placeholders for all players (spectators and active)
+	                $('pagemaintitletext').innerHTML = $('pagemaintitletext').innerHTML.replace("{receive}", '<span class="logIcon blue" ></span> &nbsp;' );
+	                $('pagemaintitletext').innerHTML = $('pagemaintitletext').innerHTML.replace("{channel}", '<span class="logIcon ichannel"></span> &nbsp;' );
+	                $('pagemaintitletext').innerHTML = $('pagemaintitletext').innerHTML.replace("{meditate}", '<span class="logIcon imeditate"></span> &nbsp;' );
+	                
 	                if( this.isCurrentPlayerActive() )
 	                { 
+	            	     // Check if THIS player has no inspiration tokens left
+	            	     if(args.args.inspirationsLeft == 0)
+	            	     {
+                             // Override with warning message only for this player
+                             $('pagemaintitletext').innerHTML = "<span style='color:black; font-weight:bold;'>" + _("You must meditate or can only play tokens to your Bhagya Bubbles.") + "</span>";
+	            	     }
+	            	     
+	            	     // Add final round warning if applicable
+	            	     if(this.isFinalRound) {
+	            	         this.updateTitleForFinalRound();
+	            	     }
 
 	                    this.inspirationsNotBlocked = args.args.inspirationsNotBlocked;
 		            	this.frees = args.args.frees;
@@ -398,32 +435,55 @@ function (dojo, declare) {
 	                }
 	            	break;	            
 	            
-            case 'channel':
-                var id = "#inspiration_"+this.getActivePlayerId()+"_"+args.args.inspiration;
-                this.possibles = args.args.possibles;
-                this.channelStep = args.args.step;
-                this.channelUndo = args.args.undo;
-                this.selectedEnergyId = null;
-                dojo.query(id).addClass("currentInspiration");
-                // Always clear both selected and selectable classes from all energy tokens at the start of each channel step
-                dojo.query(".energy").removeClass("selected").removeClass("selectable");
-                if( this.isCurrentPlayerActive())
-                {
-                    // If undo is available (==1), all moves are complete - wait for confirmation
-                    // Otherwise, update which energies are selectable based on the possibles array
-                    if(args.args.undo != 1)
-                    {
-                        // Always re-apply selectable to all eligible energies
-                        for(var id in this.possibles)
-                        {
-                            dojo.addClass("energy_"+id, 'selectable' );
-                            dojo.query("#energy_"+id).connect('onclick', this, 'onEnergyChannel');
-                        }
-                    }
-                }
-                // Note: Don't clear 'selected' class from destination placeholders here
-                // We want to preserve visual feedback of which destinations were selected during channel sequence
-                break;
+	            case 'channel':
+                     var id = "#inspiration_"+this.getActivePlayerId()+"_"+args.args.inspiration;
+                     this.possibles = args.args.possibles;
+                     this.channelStep = args.args.step;
+                     this.channelUndo = args.args.undo;
+                     this.selectedEnergyId = null;
+                     dojo.query(id).addClass("currentInspiration");
+                     
+                     // Clear selected/selectable from energy tokens to prepare for new selections
+                     dojo.query(".energy").removeClass("selected").removeClass("selectable");
+                     
+                     if( this.isCurrentPlayerActive())
+                     { 
+                         // If undo is available (==1), all moves are complete - wait for confirmation
+                         // Otherwise, mark energies as selectable based on the possibles array
+                         if(args.args.undo != 1)
+                         { 
+                             // Mark each possible energy as selectable
+                             // Only mark as selectable if the energy has actual destination choices
+                             for(var energyId in this.possibles)
+                             {
+                                 // Check if this energy has at least one destination choice
+                                 var hasDestinations = false;
+                                 for(var choiceIdx in this.possibles[energyId]) {
+                                     hasDestinations = true;
+                                     break;
+                                 }
+                                 
+                                 if(hasDestinations) {
+                                     var energyNode = dojo.byId("energy_"+energyId);
+                                     if(energyNode) {
+                                         dojo.addClass(energyNode, 'selectable');
+                                         
+                                         // Ensure click handler is attached
+                                         if(energyNode._dojoConnections) {
+                                             energyNode._dojoConnections.forEach(function(conn) {
+                                                 dojo.disconnect(conn);
+                                             });
+                                         }
+                                         var connection = dojo.connect(energyNode, 'onclick', this, 'onEnergyMaya');
+                                         energyNode._dojoConnections = [connection];
+                                     }
+                                 }
+                             }
+                         }
+                     }
+	            	// Note: Preserve 'selected' class on destination placeholders for visual feedback
+	            	
+	                break;
 	                
 	            case "pickColor":	            	
             		if( this.isCurrentPlayerActive() )
@@ -660,6 +720,11 @@ function (dojo, declare) {
                 title = title.replace("{channel}", "<span class='logIcon ichannel'></span> &nbsp;");
                 title = title.replace("{meditate}", "<span class='logIcon imeditate'></span> &nbsp;");
                 $('pagemaintitletext').innerHTML = title;
+                
+                // Add final round warning if applicable
+                if(this.isFinalRound) {
+                    this.updateTitleForFinalRound();
+                }
             }
             
             // Re-enter state to restore UI
@@ -840,13 +905,26 @@ function (dojo, declare) {
         
         onEnergyMaya:function(event)
         {
-            dojo.stopEvent( event );  
+            dojo.stopEvent( event );
+            
+            // DEBUG: Comprehensive click tracking
+            console.log('=== ENERGY CLICK DEBUG ===');
+            console.log('Energy ID:', event.currentTarget.id);
+            console.log('Classes:', event.currentTarget.className);
+            console.log('Parent:', event.currentTarget.parentNode.id);
+            console.log('State:', this.stateName);
+            console.log('Is Active Player:', this.isCurrentPlayerActive());
+            console.log('Has Selectable Class:', event.currentTarget.classList.contains('selectable'));
+              
             if(this.isCurrentPlayerActive())
             {
             	if(event.currentTarget.classList.contains('selectable')) { 
             		
+            		console.log('✓ Passed active & selectable checks');
+            		
             		if( this.stateName == "take" && this.checkAction( "actTake" ) )
             		{
+            		    console.log('→ Processing TAKE action');
 	            		event.currentTarget.classList.toggle('selected');
 	            		var parentId = event.currentTarget.parentNode.id;
 	            		var row = parentId.split('_')[2];
@@ -933,54 +1011,94 @@ function (dojo, declare) {
 	            	}
             		else
             		{
+            		    console.log('→ Routing to CHANNEL action');
             			this.onEnergyChannel(event);
             		}
             	
+            	} else {
+            	    console.log('✗ Energy NOT selectable');
             	}
+            } else {
+                console.log('✗ Player NOT active');
             }
+            console.log('=========================');
         },
         
         onEnergyChannel:function(event)
         {
-            if( this.stateName == "channel" && this.checkAction( "actMove" ) )
-            {
-                this.selectedEnergyId  = event.currentTarget.id.split('_')[1];
-                // Immediately remove selectable class from the clicked energy to stop visual effects
-                event.currentTarget.classList.remove('selectable');
-                // possibles[energyId] is an object with choice indices as keys: {0: row, 1: row}
-                // Count the number of destination choices
-                var destinationChoices = [];
-                for(var choiceIdx in this.possibles[this.selectedEnergyId]) {
-                    destinationChoices.push(this.possibles[this.selectedEnergyId][choiceIdx]);
-                }
-                if(destinationChoices.length == 1)
-                {
-                    // Execute move immediately if only one destination
-                    // The server handles the multi-step channel flow
-                    this.ajaxcall('/undochakra/undochakra/actMove.html', {
-                        lock: true,
-                        energyId: this.selectedEnergyId,
-                        row: destinationChoices[0]
-                    }, this, function( result ) {
-                        // Force a re-scan of the board state after move
-                        this.onEnteringState('channel', this.gamedatas.gamestate);
-                    }, function( is_error ) {
-                        // No error message needed; server does not advance state until confirm
-                    });
-                }
-                else
-                {
+            console.log('--- CHANNEL HANDLER ---');
+            console.log('State:', this.stateName, 'Can Act:', this.checkAction('actMove'));
+            
+        	if( this.stateName == "channel" && this.checkAction( "actMove" ) )
+    		{
+        		this.selectedEnergyId  = event.currentTarget.id.split('_')[1];
+        		console.log('Selected Energy ID:', this.selectedEnergyId);
+        		console.log('Possibles:', this.possibles);
+        		
+        		if(!this.possibles[this.selectedEnergyId]) {
+        		    console.error('✗ Energy', this.selectedEnergyId, 'NOT in possibles array!');
+        		    return; // Exit early if energy not in possibles
+        		}
+        		
+        		// Immediately check and remove selectable to prevent double-processing
+        		if(!event.currentTarget.classList.contains('selectable')) {
+        		    console.log('✗ Already processed, ignoring');
+        		    return; // Already processed, ignore duplicate click
+        		}
+        		
+        		// Immediately remove selectable from this specific energy first
+        		event.currentTarget.classList.remove('selectable');
+        		console.log('✓ Removed selectable from energy');
+        		
+        		// possibles[energyId] is an object with choice indices as keys: {0: row, 1: row}
+        		// Count the number of destination choices
+        		var destinationChoices = [];
+        		for(var choiceIdx in this.possibles[this.selectedEnergyId]) {
+        		    destinationChoices.push(this.possibles[this.selectedEnergyId][choiceIdx]);
+        		}
+        		console.log('Destination choices:', destinationChoices);
+        		
+        		if(destinationChoices.length == 1)
+        		{
+        		    console.log('→ Single destination, executing move to row', destinationChoices[0]);
+        			// Remove selectable from ALL other energies to prevent double-clicks
+        			dojo.query(".energy.selectable").removeClass('selectable');
+        			
+        			// Execute move immediately if only one destination
+        			// The server handles the multi-step channel flow and will re-mark energies as selectable
+        			this.ajaxcall('/undochakra/undochakra/actMove.html', {
+        			    lock: true,
+        			    energyId: this.selectedEnergyId,
+        			    row: destinationChoices[0]
+        			}, this, function( result ) {
+        			    console.log('✓ Move AJAX success. Result:', result);
+        			}, function( is_error, error_msg ) {
+        			    if(is_error) {
+        			        console.error('✗ Move AJAX error. msg:', error_msg);
+        			    }
+        			});
+        		}
+        		else
+        		{
+        		    console.log('→ Multiple destinations, showing selectable rows:', destinationChoices);
                     // Clear any previous selections
                     dojo.query(".selected").removeClass("selected"); 
-                    // Don't add selected class to energy during channel moves - animation provides feedback
-                    // Mark destination placeholders as selectable
-                    for(var i = 0; i < destinationChoices.length; i++)
-                    {
-                        var row = destinationChoices[i];
-                        dojo.query("#playertable_"+this.player_id+" .row"+row+".energyph:empty").addClass("selectable"); 
-                    }
-                }
-            }
+            		
+            		// Immediately remove selectable from all energies to prevent issues
+            		dojo.query(".energy.selectable").removeClass('selectable');
+            		
+            		// Mark destination placeholders as selectable
+            		for(var i = 0; i < destinationChoices.length; i++)
+	                {
+            			var row = destinationChoices[i];
+            			dojo.query("#playertable_"+this.player_id+" .row"+row+".energyph:empty").addClass("selectable"); 
+            			console.log('  - Row', row, 'marked as selectable');
+	            	}
+        		}
+    		} else {
+    		    console.log('✗ Not in channel state or cannot act');
+    		}
+    		console.log('----------------------');
         },
         
 
@@ -1008,6 +1126,7 @@ function (dojo, declare) {
             dojo.subscribe( 'harmonize', this, "notif_harmonize" );
             dojo.subscribe( 'objo', this, "notif_objo" );
             dojo.subscribe( 'yinyang', this, "notif_yinyang" );
+            dojo.subscribe( 'finalRound', this, "notif_finalRound" );
         },  
 
         notif_objo: function( notif )
@@ -1043,20 +1162,21 @@ function (dojo, declare) {
         
         notif_newmeditation: function( notif )
         {
-            dojo.removeClass("meditation_"+notif.args.player_id+"_"+notif.args.color, "hidden");
-            dojo.addClass("meditation_"+notif.args.player_id+"_"+notif.args.color, "appears");
-            if(notif.args.value != 0)
-            {
-                var plenitudeId = "plenitude_"+notif.args.color;
+        	dojo.removeClass("meditation_"+notif.args.player_id+"_"+notif.args.color, "hidden");
+        	dojo.addClass("meditation_"+notif.args.player_id+"_"+notif.args.color, "appears");
+        	if(notif.args.value != 0)
+        	{
+            	var plenitudeId = "plenitude_"+notif.args.color;
                 dojo.query("#"+plenitudeId).addClass("val"+notif.args.value); 
-            }
-            // Add color-specific tooltip for the newly revealed meditation token
-            var meditationId = "meditation_"+notif.args.player_id+"_"+notif.args.color;
-            this.addTooltipHtml(meditationId, this.format_block('jstpl_tooltip_common', {
-                title: _(this.translatableTexts.tooltip_meditation_title) + ' : ' + _(this.colors[notif.args.color]),
-                description: _(this.translatableTexts.tooltip_meditation_description)
-            }));
-            // Always restore the main title text to standard after meditation
+        		
+        	}
+        	// Add color-specific tooltip for the newly revealed meditation token
+        	var meditationId = "meditation_"+notif.args.player_id+"_"+notif.args.color;
+        	this.addTooltipHtml(meditationId, this.format_block('jstpl_tooltip_common', {
+        	    title: _(this.translatableTexts.tooltip_meditation_title) + ' : ' + _(this.colors[notif.args.color]),
+        	    description: _(this.translatableTexts.tooltip_meditation_description)
+        	}));
+            // Restore the main title text to standard after meditation
             if($('pagemaintitletext') && this.gamedatas && this.gamedatas.gamestate && this.gamedatas.gamestate.descriptionmyturn) {
                 var args = this.gamedatas.gamestate.args ? dojo.clone(this.gamedatas.gamestate.args) : {};
                 args.you = _('You');
@@ -1066,6 +1186,7 @@ function (dojo, declare) {
                 title = title.replace("{meditate}", "<span class='logIcon imeditate'></span> &nbsp;");
                 $('pagemaintitletext').innerHTML = title;
             }
+             
         }, 
 
         notif_reveal: function( notif )
@@ -1095,7 +1216,13 @@ function (dojo, declare) {
             this.displayYinyang(notif.args.player_id, notif.args.nb);
             this.fadeOutAndDestroy('energy_'+notif.args.energy1);
             this.fadeOutAndDestroy('energy_'+notif.args.energy2);
-        }, 
+        },
+        
+        notif_finalRound: function( notif )
+        {
+            this.isFinalRound = true;
+            this.updateTitleForFinalRound();
+        },
         
         displayYinyang: function(player_id, nb)
         {
@@ -1111,6 +1238,18 @@ function (dojo, declare) {
         	 this.addTooltipHtmlToClass( 'yingyangfull', this.format_block('jstpl_tooltip_common', {title: _(this.translatableTexts.tooltip_full_yingyang), description: _(this.translatableTexts.tooltip_full_description) }));
          	 this.addTooltipHtmlToClass( 'yingyanghalf', this.format_block('jstpl_tooltip_common', {title: _(this.translatableTexts.tooltip_half_yingyang), description: _(this.translatableTexts.tooltip_half_description) }));
              
+        },
+        
+        updateTitleForFinalRound: function()
+        {
+            if($('pagemaintitletext')) {
+                var currentTitle = $('pagemaintitletext').innerHTML;
+                // Only add warning if not already present
+                if(currentTitle.indexOf('THIS IS THE FINAL ROUND') === -1) {
+                    var warningHTML = " <span style='color:red; font-weight:bold;'>- THIS IS THE FINAL ROUND</span>";
+                    $('pagemaintitletext').innerHTML = currentTitle + warningHTML;
+                }
+            }
         },
         
         format_string_recursive : function(log, args) {
