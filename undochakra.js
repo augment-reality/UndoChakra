@@ -280,95 +280,103 @@ function (dojo, declare) {
         	var id = "energy_"+energy.id;
         	var phid = "ph_"+energy.location+"_"+energy.row+"_"+energy.col;
         	
-        	if(dojo.byId(id) == null)
-        	{
-        	   	dojo.place(this.format_block('jstpl_energy', energy), $('maya'));  
-        	}
+            if(dojo.byId(id) == null)
+            {
+                dojo.place(this.format_block('jstpl_energy', energy), $('maya'));
+                // Add tooltip and click handler immediately for new maya energy
+                var energyNode = dojo.byId(id);
+                if(energyNode) {
+                    if(energyNode._dojoConnections) {
+                        energyNode._dojoConnections.forEach(function(conn) {
+                            dojo.disconnect(conn);
+                        });
+                    }
+                    var connection = dojo.connect(energyNode, 'onclick', this, 'onEnergyMaya');
+                    energyNode._dojoConnections = [connection];
+                    setTimeout(dojo.hitch(this, function() {
+                        if(energy.color == "white") {
+                            this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
+                                title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]),
+                                description: _(this.translatableTexts.tooltip_energywhite_description)
+                            }));
+                        } else {
+                            this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
+                                title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]),
+                                description: _(this.translatableTexts.tooltip_energy_description)
+                            }));
+                        }
+                    }), 100);
+                }
+            }
         	
         	// Check if this is a channel move by looking at the target location
         	// Channel moves go to player boards during channel state
-        	var isChannelMove = energy.location && energy.location !== 'maya' && phid.indexOf('ph_' + energy.location) === 0 && this.stateName === 'channel';
-        	
-        	if(isChannelMove) {
-        	    // For channel moves, animate first then attach to preserve tooltips during animation
-        	    var element = dojo.byId(id);
-        	    if(element) {
-        	        dojo.style(id, 'opacity', '1');
-        	        dojo.style(id, 'visibility', 'visible');
-        	    }
-        	    
-        	    var anim = this.slideToObject(id, phid);
-        	    dojo.connect(anim, 'onEnd', dojo.hitch(this, function() {
-        	        // Use attachToNewParent after animation to properly handle styling
-        	        this.attachToNewParent(id, phid);
-        	        dojo.style(id, 'position', 'absolute');
-        	        dojo.style(id, 'top', '0px');
-        	        dojo.style(id, 'left', '0px');
-        	        
-        	        // Force full opacity on energy token to override any parent inheritance
-        	        var energyElement = dojo.byId(id);
-        	        if(energyElement) {
-        	            energyElement.style.opacity = '1';
-        	            energyElement.style.visibility = 'visible';
-        	            energyElement.style.setProperty('opacity', '1', 'important');
-        	        }
-        	        
-        	        // Re-add tooltip after animation and DOM manipulation
-        	        // Use a small delay to ensure DOM is fully updated
-        	        setTimeout(dojo.hitch(this, function() {
-        	            if(energy.color == "white") {
-        	                this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
-        	                    title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
-        	                    description: _(this.translatableTexts.tooltip_energywhite_description)
-        	                }));
-        	            } else {
-        	                this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
-        	                    title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
-        	                    description: _(this.translatableTexts.tooltip_energy_description)
-        	                }));
-        	            }
-        	        }), 100);
-        	    }));
-        	    anim.play();
-        	} else {
-        	    // Normal move (take action, etc.) - use standard approach
-        	    this.attachToNewParent(id, phid);
-        	    this.slideToObjectPos(id, phid, 0, 0).play();
-        	}
-        	
-        	// Attach click handler immediately (before setTimeout)
-        	// Disconnect any existing handlers first to prevent duplicates
-        	var energyNode = dojo.byId(id);
-        	if(energyNode) {
-        	    // Clear any existing Dojo connections by storing a reference
-        	    if(energyNode._dojoConnections) {
-        	        energyNode._dojoConnections.forEach(function(conn) {
-        	            dojo.disconnect(conn);
-        	        });
-        	    }
-        	    // Attach new handler and store the connection
-        	    var connection = dojo.connect(energyNode, 'onclick', this, 'onEnergyMaya');
-        	    energyNode._dojoConnections = [connection];
-        	}
-        	
-        	// Always ensure tooltip is present after move (in case it was lost during DOM manipulation)
-        	// Use setTimeout to ensure DOM is settled before adding tooltip
-        	setTimeout(dojo.hitch(this, function() {
-        	    if(energy.color == "white")
-        	    {
-        	        this.addTooltipHtml( id, this.format_block('jstpl_tooltip_common', {
-        	            title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
-        	            description: _(this.translatableTexts.tooltip_energywhite_description)
-        	        })); 		
-        	    }
-        	    else
-        	    {
-        	        this.addTooltipHtml( id, this.format_block('jstpl_tooltip_common', {
-        	            title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]), 
-        	            description: _(this.translatableTexts.tooltip_energy_description)
-        	        }));
-        	    }
-        	}), 100);
+            var isChannelMove = energy.location && energy.location !== 'maya' && phid.indexOf('ph_' + energy.location) === 0 && this.stateName === 'channel';
+
+            var afterMove = dojo.hitch(this, function() {
+                // Attach click handler (disconnect previous)
+                var energyNode = dojo.byId(id);
+                if(energyNode) {
+                    if(energyNode._dojoConnections) {
+                        energyNode._dojoConnections.forEach(function(conn) {
+                            dojo.disconnect(conn);
+                        });
+                    }
+                    var connection = dojo.connect(energyNode, 'onclick', this, 'onEnergyMaya');
+                    energyNode._dojoConnections = [connection];
+                    // Remove any existing tooltip
+                    if (energyNode._tooltip) {
+                        energyNode._tooltip.destroy();
+                        energyNode._tooltip = null;
+                    }
+                }
+                // Add tooltip after DOM is settled
+                setTimeout(dojo.hitch(this, function() {
+                    var node = dojo.byId(id);
+                    if (node && node._tooltip) {
+                        node._tooltip.destroy();
+                        node._tooltip = null;
+                    }
+                    if(energy.color == "white") {
+                        this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
+                            title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]),
+                            description: _(this.translatableTexts.tooltip_energywhite_description)
+                        }));
+                    } else {
+                        this.addTooltipHtml(id, this.format_block('jstpl_tooltip_common', {
+                            title: _(this.translatableTexts.tooltip_energy_title)+" : "+_(this.colors[energy.color]),
+                            description: _(this.translatableTexts.tooltip_energy_description)
+                        }));
+                    }
+                }), 100);
+            });
+
+            if(isChannelMove) {
+                var element = dojo.byId(id);
+                if(element) {
+                    dojo.style(id, 'opacity', '1');
+                    dojo.style(id, 'visibility', 'visible');
+                }
+                var anim = this.slideToObject(id, phid);
+                dojo.connect(anim, 'onEnd', dojo.hitch(this, function() {
+                    this.attachToNewParent(id, phid);
+                    dojo.style(id, 'position', 'absolute');
+                    dojo.style(id, 'top', '0px');
+                    dojo.style(id, 'left', '0px');
+                    var energyElement = dojo.byId(id);
+                    if(energyElement) {
+                        energyElement.style.opacity = '1';
+                        energyElement.style.visibility = 'visible';
+                        energyElement.style.setProperty('opacity', '1', 'important');
+                    }
+                    afterMove();
+                }));
+                anim.play();
+            } else {
+                this.attachToNewParent(id, phid);
+                this.slideToObjectPos(id, phid, 0, 0).play();
+                afterMove();
+            }
         },
         
         moveInspiration: function(inspiration)

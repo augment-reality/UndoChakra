@@ -45,7 +45,7 @@ class Undochakra extends Table
             "moduleD" => 101
         ) );        
 	}
-
+	
 
     /*
         setupNewGame:
@@ -135,8 +135,7 @@ class Undochakra extends Table
         }
         
         // Init global values with their initial values
-        $player_id = self::getActivePlayerId();
-        $energyIds = json_decode($energyIds, true);
+        self::setGameStateInitialValue( 'channel', 0 );
         self::setGameStateInitialValue( 'step', 0 );
         self::setGameStateInitialValue( 'choice', 0 );
         self::setGameStateInitialValue( 'alreadyMoved', 0 );
@@ -381,7 +380,7 @@ class Undochakra extends Table
 //////////// Player actions
 //////////// 
 
-    function actColor(string $color)
+    function actColor($color)
     {
         self::checkAction( 'actColor' );        
         $player_id = self::getActivePlayerId();
@@ -473,7 +472,7 @@ class Undochakra extends Table
         $this->gamestate->nextState( 'finish' );  
     }
     
-    function actMove( int $energyId, int $row)
+    function actMove( $energyId, $row)
     {
         self::checkAction( 'actMove' );
         
@@ -629,7 +628,7 @@ class Undochakra extends Table
         $this->gamestate->nextState( 'next' );
     }
     
-    function actChannel( int $id )
+    function actChannel( $id )
     {
         self::checkAction( 'actChannel' );
         $player_id = self::getActivePlayerId();
@@ -667,7 +666,7 @@ class Undochakra extends Table
         
     }
 
-    function actTake( array $energyIds, int $row )
+    function actTake( $energyIds, $row )
     {
         self::checkAction( 'actTake' ); 
         
@@ -675,7 +674,6 @@ class Undochakra extends Table
         $sql = "SELECT player_id id, player_name, player_color, player_score FROM player where player_id=".$player_id;
         $player = self::getObjectFromDb( $sql );
         
-        $energyIds = json_decode($energyIds, true);
         $energies = array();
         foreach($energyIds as $c => $id)
         {
