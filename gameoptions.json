@@ -1,0 +1,36 @@
+{
+    "100": {
+        "name": "Module A: Yin-Yang",
+        "values": {
+            "1": {
+                "name": "Off",
+                "tmdisplay": ""
+            },
+            "2": {
+                "name": "On",
+                "tmdisplay": "With extension Module A : Yin-Yang",
+                "premium": true,
+                "majorvariant": true,
+                "beta": true
+            }
+        },
+        "default": 1
+    },
+    "101": {
+        "name": "Module D: Objectives",
+        "values": {
+            "1": {
+                "name": "Off",
+                "tmdisplay": ""
+            },
+            "2": {
+                "name": "On",
+                "tmdisplay": "With extension Module D : Objectives",
+                "premium": true,
+                "majorvariant": true,
+                "beta": true
+            }
+        },
+        "default": 1
+    }
+}

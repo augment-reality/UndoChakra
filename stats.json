@@ -1,0 +1,50 @@
+{
+    "table": [],
+    "player": {
+        "turns_number": {
+            "id": 10,
+            "name": "Number of turns",
+            "type": "int"
+        },
+        "chakra_harmonized": {
+            "id": 11,
+            "name": "Number of harmonized chakra",
+            "type": "int"
+        },
+        "chakra_aligned": {
+            "id": 12,
+            "name": "Number of aligned harmonized chakra ",
+            "type": "int"
+        },
+        "chakra_points": {
+            "id": 13,
+            "name": "Number of points gains with chakra",
+            "type": "int"
+        },
+        "black_points": {
+            "id": 14,
+            "name": "Number of points gains with alleviated black energy",
+            "type": "int"
+        },
+        "harmo_points": {
+            "id": 15,
+            "name": "Number of points gains with harmonization bonus",
+            "type": "int"
+        },
+        "meditation": {
+            "id": 16,
+            "name": "Number of meditation done",
+            "type": "int"
+        },
+        "YinYang": {
+            "id": 17,
+            "name": "Number of points gains with Yin-Yang symbol (Module A)",
+            "type": "int"
+        },
+        "Objectives": {
+            "id": 18,
+            "name": "Number of points gains with objectives (Module D)",
+            "type": "int"
+        }
+    }
+}

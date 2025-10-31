@@ -45,12 +45,7 @@ class Undochakra extends Table
             "moduleD" => 101
         ) );        
 	}
-	
-    protected function getGameName( )
-    {
-		// Used for translations and stuff. Please do not modify.
-        return "undochakra";
-    }	
+
 
     /*
         setupNewGame:
@@ -140,7 +135,8 @@ class Undochakra extends Table
         }
         
         // Init global values with their initial values
-        self::setGameStateInitialValue( 'channel', 0 );
+        $player_id = self::getActivePlayerId();
+        $energyIds = json_decode($energyIds, true);
         self::setGameStateInitialValue( 'step', 0 );
         self::setGameStateInitialValue( 'choice', 0 );
         self::setGameStateInitialValue( 'alreadyMoved', 0 );
@@ -385,7 +381,7 @@ class Undochakra extends Table
 //////////// Player actions
 //////////// 
 
-    function actColor($color)
+    function actColor(string $color)
     {
         self::checkAction( 'actColor' );        
         $player_id = self::getActivePlayerId();
@@ -477,7 +473,7 @@ class Undochakra extends Table
         $this->gamestate->nextState( 'finish' );  
     }
     
-    function actMove( $energyId, $row)
+    function actMove( int $energyId, int $row)
     {
         self::checkAction( 'actMove' );
         
@@ -633,7 +629,7 @@ class Undochakra extends Table
         $this->gamestate->nextState( 'next' );
     }
     
-    function actChannel( $id )
+    function actChannel( int $id )
     {
         self::checkAction( 'actChannel' );
         $player_id = self::getActivePlayerId();
@@ -671,7 +667,7 @@ class Undochakra extends Table
         
     }
 
-    function actTake( $energyIds, $row )
+    function actTake( array $energyIds, int $row )
     {
         self::checkAction( 'actTake' ); 
         
@@ -679,6 +675,7 @@ class Undochakra extends Table
         $sql = "SELECT player_id id, player_name, player_color, player_score FROM player where player_id=".$player_id;
         $player = self::getObjectFromDb( $sql );
         
+        $energyIds = json_decode($energyIds, true);
         $energies = array();
         foreach($energyIds as $c => $id)
         {
